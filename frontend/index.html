@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Health Tracker - Smart Health Monitoring</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 40px 20px;
+      text-align: center;
+      border-radius: 15px;
+      margin-bottom: 30px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+
+    .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+    .header p { font-size: 16px; opacity: 0.95; }
+
+    .container { 
+      max-width: 1200px; 
+      margin: 0 auto; 
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 25px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+
+    .card h2 {
+      color: #333;
+      margin-bottom: 20px;
+      font-size: 1.5em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-subtitle {
+      color: #666;
+      font-size: 13px;
+      margin-bottom: 20px;
+      padding: 10px 15px;
+      background: #f0f4ff;
+      border-left: 3px solid #667eea;
+      border-radius: 4px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      color: #555;
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 12px 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: all 0.3s;
+      font-family: inherit;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      background: #f8faff;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    button {
+      flex: 1;
+      padding: 12px 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 14px;
+      transition: all 0.3s;
+      font-family: inherit;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button.secondary {
+      background: linear-gradient(135deg, #6c757d 0%, #545b62 100%);
+    }
+
+    button.secondary:hover {
+      box-shadow: 0 6px 15px rgba(108, 117, 125, 0.4);
+    }
+
+    .alert-box {
+      padding: 16px;
+      margin-top: 16px;
+      border-radius: 8px;
+      border-left: 4px solid;
+      animation: slideIn 0.3s ease;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    @keyframes slideIn { 
+      from { 
+        opacity: 0; 
+        transform: translateX(-20px); 
+      } 
+      to { 
+        opacity: 1; 
+        transform: translateX(0); 
+      } 
+    }
+
+    .alert-success {
+      background: #d4edda;
+      border-left-color: #28a745;
+      color: #155724;
+    }
+
+    .alert-warning {
+      background: #fff3cd;
+      border-left-color: #ffc107;
+      color: #856404;
+    }
+
+    .alert-critical {
+      background: #f8d7da;
+      border-left-color: #dc3545;
+      color: #721c24;
+    }
+
+    .alert-info {
+      background: #d1ecf1;
+      border-left-color: #17a2b8;
+      color: #0c5460;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 15px;
+    }
+
+    .stat {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 15px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      opacity: 0.9;
+      margin-top: 5px;
+    }
+
+    .records-list {
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 15px;
+    }
+
+    .record-item {
+      padding: 12px;
+      background: linear-gradient(135deg, #f5f7fa 0%, #f9fbfd 100%);
+      margin-bottom: 10px;
+      border-radius: 6px;
+      border-left: 4px solid #667eea;
+      font-size: 14px;
+    }
+
+    .record-item strong {
+      color: #667eea;
+    }
+
+    .timestamp {
+      color: #999;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+
+    .no-data {
+      color: #999;
+      font-style: italic;
+      text-align: center;
+      padding: 30px 20px;
+      background: #f9fbfd;
+      border-radius: 8px;
+      border: 2px dashed #ddd;
+    }
+
+    .loading {
+      color: #0066cc;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 3px solid rgba(102, 126, 234, 0.3);
+      border-radius: 50%;
+      border-top-color: #667eea;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .step-indicator {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      padding: 12px;
+      background: #f0f4ff;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #667eea;
+    }
+
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      background: #667eea;
+      color: white;
+      border-radius: 50%;
+      font-weight: bold;
+      font-size: 12px;
+    }
+
+    .full-width {
+      grid-column: 1 / -1;
+    }
+
+    canvas {
+      max-width: 100%;
+      display: none;
+      margin-top: 15px;
+    }
+
+    .chart-container {
+      max-height: 400px;
+      margin-top: 15px;
+    }
+
+    @media (max-width: 768px) {
+      .header h1 { font-size: 1.8em; }
+      .header p { font-size: 14px; }
+      .container { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: 1fr; }
+      .button-group { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🏥 Health Tracker</h1>
+    <p>Smart health monitoring and doctor visit alerts</p>
+  </div>
+
+  <div class="container">
+    <!-- STEP 1: Create User -->
+    <div class="card">
+      <h2>👤 Step 1: Create Your Profile</h2>
+      <div class="card-subtitle">Enter your basic information to get started</div>
+      
+      <div class="step-indicator">
+        <div class="step-number">1</div>
+        Enter name and age
+      </div>
+
+      <div class="form-group">
+        <label>Full Name</label>
+        <input id="name" type="text" placeholder="e.g., John Doe" autocomplete="name">
+      </div>
+
+      <div class="form-group">
+        <label>Age (years)</label>
+        <input id="age" type="number" placeholder="e.g., 35" min="1" max="120">
+      </div>
+
+      <div class="button-group">
+        <button onclick="createUser()">✅ Create Profile</button>
+      </div>
+
+      <div id="userOutput"></div>
+    </div>
+
+    <!-- STEP 2: Set Health Profile -->
+    <div class="card">
+      <h2>⚙️ Step 2: Set Health Thresholds</h2>
+      <div class="card-subtitle">Configure your personalized alert thresholds</div>
+
+      <div class="step-indicator">
+        <div class="step-number">2</div>
+        Set your safe health limits
+      </div>
+
+      <div class="form-group">
+        <label>User ID (from Step 1)</label>
+        <input id="profileUserId" type="number" placeholder="e.g., 1" min="1">
+      </div>
+
+      <div class="form-group">
+        <label>Health Conditions</label>
+        <input id="conditions" type="text" placeholder="e.g., Hypertension, Diabetes" autocomplete="off">
+      </div>
+
+      <div class="form-group">
+        <label>Blood Pressure Alert Threshold (mmHg)</label>
+        <input id="bpThreshold" type="number" placeholder="Normal: 140" value="140" min="80" max="200">
+      </div>
+
+      <div class="form-group">
+        <label>Blood Sugar Alert Threshold (mg/dL)</label>
+        <input id="sugarThreshold" type="number" placeholder="Normal: 180" value="180" min="70" max="400">
+      </div>
+
+      <div class="form-group">
+        <label>📧 Email for Alerts</label>
+        <input id="email" type="email" placeholder="your.email@gmail.com" autocomplete="email">
+      </div>
+
+      <div class="button-group">
+        <button onclick="setProfile()">💾 Save Thresholds</button>
+      </div>
+
+      <div id="profileOutput"></div>
+    </div>
+
+    <!-- STEP 3: Log Health Data -->
+    <div class="card">
+      <h2>📊 Step 3: Log Your Health Reading</h2>
+      <div class="card-subtitle">Record your daily health measurements</div>
+
+      <div class="step-indicator">
+        <div class="step-number">3</div>
+        Track your health daily
+      </div>
+
+      <div class="form-group">
+        <label>Your User ID</label>
+        <input id="healthUserId" type="number" placeholder="e.g., 1" min="1">
+      </div>
+
+      <div class="form-group">
+        <label>What are you measuring?</label>
+        <select id="type">
+          <option value="bp">🏥 Blood Pressure (mmHg)</option>
+          <option value="sugar">🩸 Blood Sugar (mg/dL)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Measured Value</label>
+        <input id="value" type="number" placeholder="Enter your reading" min="0">
+      </div>
+
+      <div class="button-group">
+        <button onclick="addHealth()">📈 Submit Reading</button>
+      </div>
+
+      <div id="healthOutput"></div>
+    </div>
+
+    <!-- STEP 4: View Alerts (Full Width) -->
+    <div class="card full-width">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div>
+          <h2>🚨 Step 4a: My Health Alerts</h2>
+          <div class="card-subtitle">Doctor visit recommendations when thresholds exceeded</div>
+
+          <div class="step-indicator">
+            <div class="step-number">4a</div>
+            Check if doctor visit needed
+          </div>
+
+          <div class="form-group">
+            <label>Your User ID</label>
+            <input id="alertUserId" type="number" placeholder="e.g., 1" min="1">
+          </div>
+
+          <div class="button-group">
+            <button onclick="getAlerts()">🔴 View Alerts</button>
+          </div>
+
+          <div id="alertsOutput"></div>
+        </div>
+
+        <div>
+          <h2>📋 Step 4b: Health History</h2>
+          <div class="card-subtitle">Last 10 readings you've recorded</div>
+
+          <div class="step-indicator">
+            <div class="step-number">4b</div>
+            Review your readings
+          </div>
+
+          <div class="form-group">
+            <label>Your User ID</label>
+            <input id="historyUserId" type="number" placeholder="e.g., 1" min="1">
+          </div>
+
+          <div class="button-group">
+            <button class="secondary" onclick="getHealth()">📖 View History</button>
+          </div>
+
+          <div id="historyOutput"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 5: View Trends -->
+    <div class="card full-width">
+      <h2>📈 Step 5: 7-Day Health Trends & Chart</h2>
+      <div class="card-subtitle">Visualize your health patterns over the last 7 days</div>
+
+      <div class="step-indicator">
+        <div class="step-number">5</div>
+        See your health progress with charts
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label>Your User ID</label>
+          <input id="trendUserId" type="number" placeholder="e.g., 1" min="1">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0;">
+          <label>Select Measurement Type</label>
+          <select id="trendType">
+            <option value="bp">🏥 Blood Pressure (mmHg)</option>
+            <option value="sugar">🩸 Blood Sugar (mg/dL)</option>
+          </select>
+        </div>
+
+        <div style="display: flex; align-items: flex-end;">
+          <button onclick="showTrends()" style="width: 100%; margin-bottom: 0;">📊 Generate Chart</button>
+        </div>
+      </div>
+
+      <div class="chart-container">
+        <canvas id="trendChart"></canvas>
+      </div>
+
+      <div id="trendOutput"></div>
+    </div>
+  </div>
+
+  <script>
+    // Smart API URL detection - works in both local and production
+    const API = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? "http://localhost:3000"
+      : window.location.origin; // Production: same domain
+    
+    const REQUEST_TIMEOUT = 15000; // 15 seconds
+    let backendConnected = false;
+
+    // Helper: Fetch with timeout
+    async function fetchWithTimeout(url, options = {}, timeout = REQUEST_TIMEOUT) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      
+      try {
+        console.log(`📡 Fetching: ${options.method || 'GET'} ${url}`);
+        const response = await fetch(url, {
+          ...options,
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        console.log(`✅ Response: ${response.status} ${response.statusText}`);
+        return response;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === "AbortError") {
+          console.error(`❌ Request timeout (${timeout}ms) for: ${url}`);
+          throw new Error(`Request timeout - server took too long to respond (${timeout}ms)`);
+        }
+        console.error(`❌ Fetch error: ${error.message} for ${url}`);
+        console.error("   Details:", error);
+        
+        // More detailed error messages
+        if (!navigator.onLine) {
+          throw new Error("No internet connection - check your network");
+        } else if (error.message.includes("Failed to fetch")) {
+          throw new Error("Cannot reach backend - is it running on http://localhost:3000? (CORS or network issue)");
+        } else {
+          throw new Error(error.message || "Network request failed");
+        }
+      }
+    }
+
+    function showLoading(elementId, message = "") {
+      try {
+        const element = document.getElementById(elementId);
+        if (element) {
+          element.innerHTML = `
+            <div class="loading" style="margin-top: 16px;">
+              <div class="spinner"></div>
+              Loading${message ? ': ' + message : '...'}
+            </div>
+          `;
+        }
+      } catch (error) {
+        console.error("Error in showLoading:", error);
+      }
+    }
+
+    function showError(elementId, error) {
+      try {
+        console.error("❌ User error:", error);
+        const element = document.getElementById(elementId);
+        if (element) {
+          // Better error messages
+          let displayError = error;
+          if (error.includes("Cannot reach backend")) {
+            displayError = "❌ <strong>Backend Error:</strong> Cannot reach server<br><em>Make sure the backend is running on port 3000</em>";
+          } else if (error.includes("timeout")) {
+            displayError = "❌ <strong>Timeout:</strong> Server response took too long<br><em>Try again or check your connection</em>";
+          } else if (error.includes("network")) {
+            displayError = "❌ <strong>Network Error:</strong> " + error;
+          } else if (error.includes("does not exist")) {
+            displayError = "❌ " + error + "<br><em>Please create a user in Step 1 first</em>";
+          } else if (error.includes("No internet")) {
+            displayError = "❌ <strong>Offline:</strong> No internet connection";
+          }
+          
+          element.innerHTML = `
+            <div class="alert-box alert-critical" style="margin-top: 16px;">
+              ${displayError}
+            </div>
+          `;
+        }
+      } catch (domError) {
+        console.error("Error in showError:", domError);
+      }
+    }
+
+    function showSuccess(elementId, message) {
+      try {
+        const element = document.getElementById(elementId);
+        if (element) {
+          element.innerHTML = `
+            <div class="alert-box alert-success" style="margin-top: 16px;">
+              ✅ ${message}
+            </div>
+          `;
+        }
+      } catch (error) {
+        console.error("Error in showSuccess:", error);
+      }
+    }
+
+    function sanitizeInput(str) {
+      if (typeof str !== 'string') return '';
+      return str.trim().substring(0, 500);
+    }
+
+    async function createUser() {
+      try {
+        const nameEl = document.getElementById("name");
+        const ageEl = document.getElementById("age");
+        
+        if (!nameEl || !ageEl) {
+          showError("userOutput", "Form elements not found");
+          return;
+        }
+
+        const name = sanitizeInput(nameEl.value);
+        const age = parseInt(ageEl.value);
+        
+        if (!name) { 
+          showError("userOutput", "Please enter your name"); 
+          return; 
+        }
+        if (!age || age < 1 || age > 150) { 
+          showError("userOutput", "Please enter a valid age (1-150)"); 
+          return; 
+        }
+
+        showLoading("userOutput", "Creating profile");
+
+        const res = await fetchWithTimeout(API + "/user", { 
+          method: "POST", 
+          headers: { "Content-Type": "application/json" }, 
+          body: JSON.stringify({ name, age }) 
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `Server error: ${res.status}`);
+
+        const outputEl = document.getElementById("userOutput");
+        if (outputEl) {
+          outputEl.innerHTML = `
+            <div class="alert-box alert-success" style="margin-top: 16px;">
+              <strong>✅ Profile Created!</strong><br>
+              Your User ID: <strong style="font-size: 18px; color: #155724;">${data.id}</strong><br>
+              Name: ${sanitizeInput(data.name)} | Age: ${data.age}<br>
+              <em>👉 Copy this ID and use it in the next steps</em>
+            </div>
+          `;
+        }
+
+        // Auto-populate other forms
+        [
+          "profileUserId", "healthUserId", "alertUserId", 
+          "historyUserId", "trendUserId"
+        ].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.value = data.id;
+        });
+
+        nameEl.value = "";
+        ageEl.value = "";
+      } catch (error) { 
+        showError("userOutput", error.message); 
+      }
+    }
+
+    async function setProfile() {
+      try {
+        const userIdEl = document.getElementById("profileUserId");
+        const emailEl = document.getElementById("email");
+        
+        if (!userIdEl || !emailEl) {
+          showError("profileOutput", "Form elements not found");
+          return;
+        }
+
+        const user_id = parseInt(userIdEl.value);
+        if (!user_id || user_id < 1) { 
+          showError("profileOutput", "Please enter a valid User ID"); 
+          return; 
+        }
+
+        const conditions = sanitizeInput(document.getElementById("conditions").value) || "none";
+        const bp_threshold = Math.max(80, Math.min(200, parseInt(document.getElementById("bpThreshold").value) || 140));
+        const sugar_threshold = Math.max(70, Math.min(400, parseInt(document.getElementById("sugarThreshold").value) || 180));
+        const email = sanitizeInput(emailEl.value);
+
+        if (!email || !email.includes("@")) { 
+          showError("profileOutput", "Please enter a valid email address"); 
+          return; 
+        }
+
+        showLoading("profileOutput", "Saving thresholds");
+
+        const res = await fetchWithTimeout(API + "/profile", { 
+          method: "POST", 
+          headers: { "Content-Type": "application/json" }, 
+          body: JSON.stringify({ user_id, conditions, bp_threshold, sugar_threshold, email }) 
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `Server error: ${res.status}`);
+
+        const outputEl = document.getElementById("profileOutput");
+        if (outputEl) {
+          outputEl.innerHTML = `
+            <div class="alert-box alert-success" style="margin-top: 16px;">
+              <strong>✅ Profile Saved!</strong><br>
+              BP Threshold: ${data.bp_threshold} mmHg<br>
+              Sugar Threshold: ${data.sugar_threshold} mg/dL<br>
+              📧 Email: ${sanitizeInput(data.email)} (alerts enabled)<br>
+              <em>Ready to log health readings!</em>
+            </div>
+          `;
+        }
+
+        emailEl.value = "";
+      } catch (error) { 
+        showError("profileOutput", error.message); 
+      }
+    }
+
+    async function addHealth() {
+      try {
+        const userIdEl = document.getElementById("healthUserId");
+        const typeEl = document.getElementById("type");
+        const valueEl = document.getElementById("value");
+
+        if (!userIdEl || !typeEl || !valueEl) {
+          showError("healthOutput", "Form elements not found");
+          return;
+        }
+
+        const user_id = parseInt(userIdEl.value);
+        const type = typeEl.value;
+        const value = parseInt(valueEl.value);
+
+        if (!user_id || user_id < 1) { 
+          showError("healthOutput", "Please enter a valid User ID"); 
+          return; 
+        }
+        if (!value || value < 0 || value > 999) { 
+          showError("healthOutput", "Please enter a valid reading (0-999)"); 
+          return; 
+        }
+
+        showLoading("healthOutput", "Submitting reading");
+
+        const res = await fetchWithTimeout(API + "/health", { 
+          method: "POST", 
+          headers: { "Content-Type": "application/json" }, 
+          body: JSON.stringify({ user_id, type, value }) 
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+
+        const outputEl = document.getElementById("healthOutput");
+        if (outputEl) {
+          if (data.alert === "No alert") {
+            outputEl.innerHTML = `
+              <div class="alert-box alert-success" style="margin-top: 16px;">
+                ✅ <strong>Reading recorded:</strong> ${type.toUpperCase()} = ${value} (Normal)
+              </div>
+            `;
+          } else {
+            const boxClass = data.severity === "critical" ? "alert-critical" : "alert-warning";
+            outputEl.innerHTML = `
+              <div class="alert-box ${boxClass}" style="margin-top: 16px;">
+                <strong>${data.severity === 'critical' ? '🚨 CRITICAL' : '⚠️ WARNING'}</strong><br>
+                ${sanitizeInput(data.alert)}
+              </div>
+            `;
+          }
+        }
+
+        valueEl.value = "";
+        setTimeout(() => getAlerts(), 500);
+      } catch (error) { 
+        showError("healthOutput", error.message); 
+      }
+    }
+
+    async function getAlerts() {
+      try {
+        const idEl = document.getElementById("alertUserId");
+        if (!idEl) return;
+
+        const id = parseInt(idEl.value);
+        if (!id || id < 1) { 
+          showError("alertsOutput", "Please enter a valid User ID"); 
+          return; 
+        }
+
+        showLoading("alertsOutput", "Loading alerts");
+
+        const res = await fetchWithTimeout(API + "/alerts/" + id);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+
+        const outputEl = document.getElementById("alertsOutput");
+        if (!outputEl) return;
+
+        if (!data || data.length === 0) { 
+          outputEl.innerHTML = '<div class="no-data" style="margin-top: 16px;">✅ No alerts yet - keep your readings below your thresholds!</div>'; 
+          return; 
+        }
+
+        let html = '';
+        data.forEach(alert => { 
+          const boxClass = alert.severity === "critical" ? "alert-critical" : "alert-warning";
+          const icon = alert.severity === "critical" ? "🚨" : "⚠️";
+          html += `
+            <div class="alert-box ${boxClass}" style="margin-top: 12px;">
+              <strong>${icon} ${alert.type.toUpperCase()}</strong><br>
+              ${sanitizeInput(alert.message)}<br>
+              <div class="timestamp">📅 ${new Date(alert.created_at).toLocaleString()}</div>
+            </div>
+          `; 
+        });
+
+        outputEl.innerHTML = html;
+      } catch (error) { 
+        const el = document.getElementById("alertsOutput");
+        if (el) showError("alertsOutput", error.message);
+      }
+    }
+
+    async function getHealth() {
+      try {
+        const idEl = document.getElementById("historyUserId");
+        if (!idEl) return;
+
+        const id = parseInt(idEl.value);
+        if (!id || id < 1) { 
+          showError("historyOutput", "Please enter a valid User ID"); 
+          return; 
+        }
+
+        showLoading("historyOutput", "Loading history");
+
+        const res = await fetchWithTimeout(API + "/health/" + id);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+
+        const outputEl = document.getElementById("historyOutput");
+        if (!outputEl) return;
+
+        if (!data || data.length === 0) { 
+          outputEl.innerHTML = '<div class="no-data" style="margin-top: 16px;">No readings recorded yet. Start by logging your health data!</div>'; 
+          return; 
+        }
+
+        let html = '<div class="records-list">';
+        data.forEach(record => { 
+          html += `
+            <div class="record-item">
+              <strong>${record.type.toUpperCase()}: ${record.value}</strong>
+              <div class="timestamp">${new Date(record.recorded_at).toLocaleString()}</div>
+            </div>
+          `; 
+        });
+        html += '</div>';
+
+        outputEl.innerHTML = html;
+      } catch (error) { 
+        const el = document.getElementById("historyOutput");
+        if (el) showError("historyOutput", error.message);
+      }
+    }
+
+    let trendChart = null;
+
+    async function showTrends() {
+      try {
+        const userIdEl = document.getElementById("trendUserId");
+        const typeEl = document.getElementById("trendType");
+
+        if (!userIdEl || !typeEl) {
+          showError("trendOutput", "Form elements not found");
+          return;
+        }
+
+        const user_id = parseInt(userIdEl.value);
+        const type = typeEl.value;
+
+        if (!user_id || user_id < 1) { 
+          showError("trendOutput", "Please enter a valid User ID"); 
+          return; 
+        }
+
+        showLoading("trendOutput", "Generating chart");
+
+        const res = await fetchWithTimeout(API + "/trends/" + user_id + "/" + type);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+
+        const outputEl = document.getElementById("trendOutput");
+        const chartEl = document.getElementById("trendChart");
+
+        if (!outputEl || !chartEl) {
+          showError("trendOutput", "Chart elements not found");
+          return;
+        }
+
+        if (!data.records || data.records.length === 0) { 
+          outputEl.innerHTML = '<div class="no-data" style="margin-top: 16px;">No data available for this 7-day period. Log some readings first!</div>'; 
+          chartEl.style.display = "none"; 
+          return; 
+        }
+
+        const labels = data.records.map(r => {
+          try {
+            return new Date(r.recorded_at).toLocaleDateString();
+          } catch (e) {
+            return "Unknown";
+          }
+        });
+        const values = data.records.map(r => parseInt(r.value) || 0);
+
+        outputEl.innerHTML = `
+          <div class="stats">
+            <div class="stat">
+              <div class="stat-value">${data.count}</div>
+              <div class="stat-label">Readings</div>
+            </div>
+            <div class="stat">
+              <div class="stat-value">${data.average}</div>
+              <div class="stat-label">Avg ${type === 'bp' ? '(mmHg)' : '(mg/dL)'}</div>
+            </div>
+          </div>
+        `;
+
+        try {
+          const ctx = chartEl.getContext("2d");
+          if (!ctx) throw new Error("Cannot get canvas context");
+          
+          if (trendChart) {
+            try {
+              trendChart.destroy();
+            } catch (e) {
+              console.warn("Error destroying old chart:", e);
+            }
+            trendChart = null;
+          }
+
+          trendChart = new Chart(ctx, {
+            type: "line",
+            data: { 
+              labels: labels, 
+              datasets: [{ 
+                label: type === 'bp' ? 'Blood Pressure (mmHg)' : 'Blood Sugar (mg/dL)', 
+                data: values, 
+                borderColor: type === 'bp' ? '#667eea' : '#f093fb', 
+                backgroundColor: type === 'bp' ? 'rgba(102, 126, 234, 0.1)' : 'rgba(240, 147, 251, 0.1)', 
+                borderWidth: 3, 
+                fill: true, 
+                tension: 0.4, 
+                pointRadius: 6, 
+                pointBackgroundColor: '#fff',
+                pointBorderColor: type === 'bp' ? '#667eea' : '#f093fb',
+                pointBorderWidth: 2
+              }] 
+            },
+            options: { 
+              responsive: true,
+              maintainAspectRatio: true,
+              plugins: { 
+                legend: { 
+                  display: true, 
+                  labels: { font: { size: 14, weight: 'bold' }, padding: 15 } 
+                } 
+              }, 
+              scales: { 
+                y: { 
+                  beginAtZero: false,
+                  title: { display: true, text: type === 'bp' ? 'mmHg' : 'mg/dL' } 
+                } 
+              } 
+            }
+          });
+
+          chartEl.style.display = "block";
+        } catch (chartError) {
+          console.error("Chart rendering error:", chartError);
+          showError("trendOutput", "Failed to render chart: " + chartError.message);
+          chartEl.style.display = "none";
+        }
+      } catch (error) { 
+        showError("trendOutput", error.message); 
+        const chartEl = document.getElementById("trendChart");
+        if (chartEl) chartEl.style.display = "none";
+      }
+    }
+
+    // Connection status and retry logic
+    window.addEventListener('load', function() {
+      console.log("✅ Health Tracker Frontend Loaded");
+      
+      let retries = 0;
+      const maxRetries = 3;
+      
+      function checkConnection() {
+        console.log(`🔍 Backend connection check (attempt ${retries + 1}/${maxRetries})...`);
+        
+        fetchWithTimeout(API + "/test", {}, 3000)
+          .then(res => {
+            if (res.ok) {
+              console.log("✅ Backend connected at " + API);
+              backendConnected = true;
+              
+              // Update header to show connection status
+              const headerP = document.querySelector('.header p');
+              if (headerP && !headerP.textContent.includes("✅")) {
+                headerP.innerHTML += " <span style='color: #90EE90;'>✅ Connected</span>";
+              }
+            } else {
+              throw new Error(`Backend returned ${res.status}`);
+            }
+          })
+          .catch(err => {
+            retries++;
+            console.warn(`⚠️ Backend connection failed (${retries}/${maxRetries}):`, err.message);
+            
+            if (retries < maxRetries) {
+              console.log(`   Retrying in 2 seconds...`);
+              setTimeout(checkConnection, 2000);
+            } else {
+              console.error("❌ Backend is not responding after 3 attempts");
+              backendConnected = false;
+              
+              const headerP = document.querySelector('.header p');
+              if (headerP) {
+                headerP.innerHTML += ` <span style='color: #FFB6C6;'>⚠️ Backend offline (http://localhost:3000)</span>`;
+              }
+              
+              // Show warning in console
+              console.warn("═".repeat(60));
+              console.warn("❌ BACKEND CONNECTION FAILED");
+              console.warn("═".repeat(60));
+              console.warn("Make sure to:");
+              console.warn("1. Keep the backend running (node server.js)");
+              console.warn("2. Run it from: C:\\...\\health-tracker\\backend");
+              console.warn("3. Set email variables before starting");
+              console.warn("4. Check that port 3000 is not blocked");
+              console.warn("═".repeat(60));
+            }
+          });
+      }
+      
+      checkConnection();
+    });
+
+    // Periodic memory cleanup
+    setInterval(() => {
+      try {
+        if (!backendConnected && typeof gc === 'function') {
+          gc(); // Manual garbage collection if available
+        }
+      } catch (e) {
+        // gc() not available in production browsers
+      }
+    }, 60000); // Every 60 seconds
+  </script>
+</body>
+</html>
