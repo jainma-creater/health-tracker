@@ -1,5 +1,5 @@
 const express = require("express");
-const sqlite3 = require("sqlite3").verbose();
+const Database = require("better-sqlite3");
 const cors = require("cors");
 const nodemailer = require("nodemailer");
 
@@ -49,37 +49,22 @@ app.get("/test", (req, res) => {
 
 // ---------- DB SETUP ----------
 let db;
-let dbReady = false;
 
 try {
-  db = new sqlite3.Database("./health.db", (err) => {
-    if (err) {
-      console.error("❌ CRITICAL: Database connection failed!");
-      console.error("   Error:", err.message);
-      process.exit(1);
-    }
-    console.log("✅ Database connected successfully");
-    dbReady = true;
-  });
+  db = new Database("./health.db");
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
   
-  // Enable foreign keys
-  db.run("PRAGMA foreign_keys = ON");
+  console.log("✅ Database connected successfully");
   
-} catch (err) {
-  console.error("❌ Failed to create database:", err.message);
-  process.exit(1);
-}
-
-db.serialize(() => {
-  db.run(`
+  // Create tables
+  db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT,
       age INTEGER
-    )
-  `);
+    );
 
-  db.run(`
     CREATE TABLE IF NOT EXISTS health_profiles (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER UNIQUE,
@@ -88,20 +73,16 @@ db.serialize(() => {
       sugar_threshold INTEGER DEFAULT 180,
       email TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+    );
 
-  db.run(`
     CREATE TABLE IF NOT EXISTS health_records (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
       type TEXT,
       value INTEGER,
       recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+    );
 
-  db.run(`
     CREATE TABLE IF NOT EXISTS alerts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
@@ -110,17 +91,15 @@ db.serialize(() => {
       severity TEXT,
       requires_doctor_visit BOOLEAN DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `, (err) => {
-    if (err) console.error("❌ Error creating tables:", err.message);
-    else console.log("✅ Database tables initialized");
-  });
-});
-
-// Global error handlers
-db.on("error", (err) => {
-  console.error("❌ Database error:", err.message);
-});
+    );
+  `);
+  
+  console.log("✅ Database tables initialized");
+  
+} catch (err) {
+  console.error("❌ Failed to initialize database:", err.message);
+  process.exit(1);
+}
 
 // ---------- ADD USER ----------
 app.post("/user", (req, res) => {
@@ -135,18 +114,11 @@ app.post("/user", (req, res) => {
       return res.status(400).json({ error: "Valid age is required (0-150)" });
     }
 
-    db.run(
-      "INSERT INTO users (name, age) VALUES (?, ?)",
-      [name.trim(), parseInt(age)],
-      function (err) {
-        if (err) {
-          console.log(`❌ User creation error:`, err.message);
-          return res.status(500).json({ error: "Failed to create user" });
-        }
-        console.log(`✅ User created: ID ${this.lastID} - ${name}`);
-        res.json({ id: this.lastID, name, age });
-      }
-    );
+    const stmt = db.prepare("INSERT INTO users (name, age) VALUES (?, ?)");
+    const result = stmt.run(name.trim(), parseInt(age));
+    
+    console.log(`✅ User created: ID ${result.lastInsertRowid} - ${name}`);
+    res.json({ id: result.lastInsertRowid, name, age });
   } catch (error) {
     console.error("❌ Unexpected error in /user:", error.message);
     res.status(500).json({ error: "Internal server error" });
@@ -155,27 +127,25 @@ app.post("/user", (req, res) => {
 
 // ---------- SET HEALTH PROFILE ----------
 app.post("/profile", (req, res) => {
-  const { user_id, conditions, bp_threshold, sugar_threshold, email } = req.body;
+  try {
+    const { user_id, conditions, bp_threshold, sugar_threshold, email } = req.body;
 
-  // Validate required fields
-  if (!user_id) {
-    console.log(`❌ Profile error: Missing user_id`);
-    return res.status(400).json({ error: "user_id is required" });
-  }
-
-  if (!email) {
-    console.log(`❌ Profile error: Missing email for user ${user_id}`);
-    return res.status(400).json({ error: "Email is required for health alerts" });
-  }
-
-  console.log(`📝 Setting profile for user ${user_id} with email ${email}`);
-
-  // First check if user exists
-  db.get("SELECT id FROM users WHERE id = ?", [user_id], (err, user) => {
-    if (err) {
-      console.log(`❌ Database error checking user:`, err);
-      return res.status(500).json({ error: err.message });
+    // Validate required fields
+    if (!user_id) {
+      console.log(`❌ Profile error: Missing user_id`);
+      return res.status(400).json({ error: "user_id is required" });
     }
+
+    if (!email) {
+      console.log(`❌ Profile error: Missing email for user ${user_id}`);
+      return res.status(400).json({ error: "Email is required for health alerts" });
+    }
+
+    console.log(`📝 Setting profile for user ${user_id} with email ${email}`);
+
+    // First check if user exists
+    const userStmt = db.prepare("SELECT id FROM users WHERE id = ?");
+    const user = userStmt.get(user_id);
 
     if (!user) {
       console.log(`❌ User ${user_id} not found`);
@@ -183,40 +153,44 @@ app.post("/profile", (req, res) => {
     }
 
     // Now insert or update profile
-    db.run(
-      `INSERT OR REPLACE INTO health_profiles 
-       (user_id, conditions, bp_threshold, sugar_threshold, email) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [user_id, conditions || "none", bp_threshold || 140, sugar_threshold || 180, email],
-      function (err) {
-        if (err) {
-          console.log(`❌ Profile insert error:`, err.message);
-          return res.status(500).json({ error: err.message });
-        }
-        console.log(`✅ Profile set for user ${user_id}`);
-        res.json({ 
-          user_id, 
-          conditions: conditions || "none", 
-          bp_threshold: bp_threshold || 140, 
-          sugar_threshold: sugar_threshold || 180,
-          email,
-          message: "✅ Health profile updated successfully"
-        });
-      }
+    const profileStmt = db.prepare(`
+      INSERT OR REPLACE INTO health_profiles 
+      (user_id, conditions, bp_threshold, sugar_threshold, email) 
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    
+    profileStmt.run(
+      user_id, 
+      conditions || "none", 
+      bp_threshold || 140, 
+      sugar_threshold || 180, 
+      email
     );
-  });
+
+    console.log(`✅ Profile set for user ${user_id}`);
+    res.json({ 
+      user_id, 
+      conditions: conditions || "none", 
+      bp_threshold: bp_threshold || 140, 
+      sugar_threshold: sugar_threshold || 180,
+      email,
+      message: "✅ Health profile updated successfully"
+    });
+  } catch (error) {
+    console.error("❌ Error in /profile:", error.message);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ---------- GET HEALTH PROFILE ----------
 app.get("/profile/:user_id", (req, res) => {
-  db.get(
-    "SELECT * FROM health_profiles WHERE user_id = ?",
-    [req.params.user_id],
-    (err, row) => {
-      if (err) return res.status(500).json(err);
-      res.json(row || { message: "No profile found" });
-    }
-  );
+  try {
+    const stmt = db.prepare("SELECT * FROM health_profiles WHERE user_id = ?");
+    const row = stmt.get(req.params.user_id);
+    res.json(row || { message: "No profile found" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ---------- ADD HEALTH ----------
@@ -235,19 +209,11 @@ app.post("/health", (req, res) => {
       return res.status(400).json({ error: "Valid value is required (0-999)" });
     }
 
-    db.run(
-      "INSERT INTO health_records (user_id, type, value) VALUES (?, ?, ?)",
-      [parseInt(user_id), type.toLowerCase(), parseInt(value)],
-      function (err) {
-        if (err) {
-          console.log(`❌ Health record error:`, err.message);
-          return res.status(500).json({ error: "Failed to record health data" });
-        }
+    const stmt = db.prepare("INSERT INTO health_records (user_id, type, value) VALUES (?, ?, ?)");
+    stmt.run(parseInt(user_id), type.toLowerCase(), parseInt(value));
 
-        console.log(`✅ Health recorded: User ${user_id}, ${type}=${value}`);
-        checkAndCreateAlert(user_id, type, value, res);
-      }
-    );
+    console.log(`✅ Health recorded: User ${user_id}, ${type}=${value}`);
+    checkAndCreateAlert(user_id, type, value, res);
   } catch (error) {
     console.error("❌ Unexpected error in /health:", error.message);
     res.status(500).json({ error: "Internal server error" });
@@ -258,54 +224,41 @@ app.post("/health", (req, res) => {
 function checkAndCreateAlert(user_id, type, value, res) {
   try {
     // Get user's health profile for personalized thresholds
-    db.get(
-      "SELECT * FROM health_profiles WHERE user_id = ?",
-      [user_id],
-      (err, profile) => {
-        if (err) {
-          console.log(`❌ Profile lookup error:`, err.message);
-          return res.status(500).json({ error: "Failed to check alerts" });
-        }
+    const profileStmt = db.prepare("SELECT * FROM health_profiles WHERE user_id = ?");
+    const profile = profileStmt.get(user_id);
 
-      const thresholds = {
-        bp: profile?.bp_threshold || 140,
-        sugar: profile?.sugar_threshold || 180
-      };
+    const thresholds = {
+      bp: profile?.bp_threshold || 140,
+      sugar: profile?.sugar_threshold || 180
+    };
 
-        const risk = checkRisk(type, value, thresholds);
+    const risk = checkRisk(type, value, thresholds);
 
-        if (risk) {
-          const { message, severity } = generateMessage(type, value, thresholds);
+    if (risk) {
+      const { message, severity } = generateMessage(type, value, thresholds);
 
-          db.run(
-            `INSERT INTO alerts (user_id, type, message, severity, requires_doctor_visit) 
-             VALUES (?, ?, ?, ?, 1)`,
-            [user_id, type, message, severity],
-            function (err) {
-              if (err) {
-                console.log(`❌ Alert insert error:`, err.message);
-                return res.status(500).json({ error: "Failed to create alert" });
-              }
-              
-              console.log(`✅ Alert created for user ${user_id}: ${severity.toUpperCase()}`);
-              
-              // Send email if email is configured
-              if (profile?.email) {
-                sendEmailAlert(profile.email, type, value, message, severity);
-              }
-              
-              return res.json({ 
-                alert: message, 
-                severity, 
-                requires_doctor_visit: true 
-              });
-            }
-          );
-        } else {
-          res.json({ alert: "No alert" });
-        }
+      const alertStmt = db.prepare(`
+        INSERT INTO alerts (user_id, type, message, severity, requires_doctor_visit) 
+        VALUES (?, ?, ?, ?, 1)
+      `);
+      
+      alertStmt.run(user_id, type, message, severity);
+      
+      console.log(`✅ Alert created for user ${user_id}: ${severity.toUpperCase()}`);
+      
+      // Send email if email is configured
+      if (profile?.email) {
+        sendEmailAlert(profile.email, type, value, message, severity);
       }
-    );
+      
+      return res.json({ 
+        alert: message, 
+        severity, 
+        requires_doctor_visit: true 
+      });
+    } else {
+      res.json({ alert: "No alert" });
+    }
   } catch (error) {
     console.error("❌ Unexpected error in checkAndCreateAlert:", error.message);
     res.status(500).json({ error: "Internal server error" });
@@ -338,59 +291,55 @@ function generateMessage(type, value, thresholds) {
 
 // ---------- GET ALERTS ----------
 app.get("/alerts/:user_id", (req, res) => {
-  db.all(
-    "SELECT * FROM alerts WHERE user_id = ? ORDER BY created_at DESC",
-    [req.params.user_id],
-    (err, rows) => {
-      if (err) return res.status(500).json(err);
-      res.json(rows || []);
-    }
-  );
+  try {
+    const stmt = db.prepare("SELECT * FROM alerts WHERE user_id = ? ORDER BY created_at DESC");
+    const rows = stmt.all(req.params.user_id);
+    res.json(rows || []);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ---------- GET HEALTH RECORDS ----------
 app.get("/health/:user_id", (req, res) => {
-  db.all(
-    "SELECT * FROM health_records WHERE user_id = ? ORDER BY recorded_at DESC LIMIT 10",
-    [req.params.user_id],
-    (err, rows) => {
-      if (err) return res.status(500).json(err);
-      res.json(rows || []);
-    }
-  );
+  try {
+    const stmt = db.prepare("SELECT * FROM health_records WHERE user_id = ? ORDER BY recorded_at DESC LIMIT 10");
+    const rows = stmt.all(req.params.user_id);
+    res.json(rows || []);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ---------- GET HEALTH TRENDS (Last 7 Days) ----------
 app.get("/trends/:user_id/:type", (req, res) => {
-  const { user_id, type } = req.params;
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const formattedDate = sevenDaysAgo.toISOString().split('T')[0]; // Get just YYYY-MM-DD
+  try {
+    const { user_id, type } = req.params;
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const formattedDate = sevenDaysAgo.toISOString().split('T')[0];
 
-  db.all(
-    `SELECT value, recorded_at FROM health_records 
-     WHERE user_id = ? AND type = ? AND DATE(recorded_at) >= ? 
-     ORDER BY recorded_at ASC`,
-    [user_id, type, formattedDate],
-    (err, rows) => {
-      if (err) {
-        console.log(`❌ Trends query error:`, err);
-        return res.status(500).json({ error: err.message });
-      }
-      
-      const data = rows || [];
-      const avg = data.length > 0 ? Math.round(data.reduce((sum, r) => sum + r.value, 0) / data.length) : 0;
-      
-      console.log(`✅ Trends retrieved: ${data.length} records for user ${user_id}, type ${type}`);
-      
-      res.json({ 
-        type,
-        records: data,
-        average: avg,
-        count: data.length
-      });
-    }
-  );
+    const stmt = db.prepare(`
+      SELECT value, recorded_at FROM health_records 
+      WHERE user_id = ? AND type = ? AND DATE(recorded_at) >= ? 
+      ORDER BY recorded_at ASC
+    `);
+    
+    const data = stmt.all(user_id, type, formattedDate) || [];
+    const avg = data.length > 0 ? Math.round(data.reduce((sum, r) => sum + r.value, 0) / data.length) : 0;
+    
+    console.log(`✅ Trends retrieved: ${data.length} records for user ${user_id}, type ${type}`);
+    
+    res.json({ 
+      type,
+      records: data,
+      average: avg,
+      count: data.length
+    });
+  } catch (error) {
+    console.log(`❌ Trends query error:`, error.message);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ---------- EMAIL ALERT FUNCTION ----------
@@ -485,17 +434,15 @@ const gracefulShutdown = () => {
   });
   
   if (db) {
-    db.close((err) => {
-      if (err) {
-        console.error("❌ Error closing database:", err.message);
-      } else {
-        console.log("✅ Database closed");
-      }
-      process.exit(0);
-    });
-  } else {
-    process.exit(0);
+    try {
+      db.close();
+      console.log("✅ Database closed");
+    } catch (err) {
+      console.error("❌ Error closing database:", err.message);
+    }
   }
+  
+  process.exit(0);
   
   // Force exit after 10 seconds if graceful shutdown fails
   setTimeout(() => {
