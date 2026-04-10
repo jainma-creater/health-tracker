@@ -1,5 +1,5 @@
 const express = require("express");
-const Database = require("better-sqlite3");
+const Database = require("./db-mock");
 const cors = require("cors");
 const nodemailer = require("nodemailer");
 

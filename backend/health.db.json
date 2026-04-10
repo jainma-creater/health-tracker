@@ -1,0 +1,12 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "name": "Mayank Bhavarlal Jain",
+      "age": 76
+    }
+  ],
+  "health_profiles": [],
+  "health_records": [],
+  "alerts": []
+}
